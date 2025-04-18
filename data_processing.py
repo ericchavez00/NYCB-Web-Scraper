@@ -1,21 +1,35 @@
-import requests, time
-currentTime = 0
-while True:
-    data = requests.get('https://gbfs.lyft.com/gbfs/2.3/bkn/en/station_status.json').json()
-    records = open("records.txt","a")
-    for station in data['data']['stations']:
-        #Station id corresponding to 88th St and Park Ave
-        if station['station_id']=="66dde103-0aca-11e7-82f6-3863bb44ef7c":
-            if station['last_reported'] != currentTime:
-                currentTime = station['last_reported']
-                stationInformation = {}
-                stationInformation['station_id'] = "66dde103-0aca-11e7-82f6-3863bb44ef7c"
-                stationInformation['last_reported'] = currentTime 
-                stationInformation['is_installed'] = station['is_installed']
-                stationInformation['is_renting'] = station['is_renting']
-                stationInformation['is_returning'] = station['is_returning']
-                stationInformation['num_docks_available'] = station['num_docks_available']
-                stationInformation['num_ebikes_available'] = station['num_ebikes_available']
-                stationInformation['num_bikes_available'] = station['num_bikes_available']
-                records.write(","+str(stationInformation))
-    time.sleep(60)
+from time import localtime
+import json
+from scipy.stats import kstest
+def helper(row):
+    row =json.loads(row)
+    timestamp = localtime(row['last_reported'])
+    if timestamp.tm_hour == 17 and timestamp.tm_min <= 15:
+        return [timestamp.tm_hour,timestamp.tm_min,timestamp.tm_sec, row['num_docks_available'], row['num_bikes_available'], row['last_reported']]
+with open("records.txt", "r") as file:
+    data = file.read()   
+rows = data.split('#')
+extractedData = [x for x in map(helper, rows) if x is not None]
+start = 0
+end = 1
+interArrivals = []
+while start < len(extractedData)-1 and end < len(extractedData):
+    #check if start and end rows are on the same date
+    if extractedData[start][1] > extractedData[end][1]:
+        start = end
+        end +=1
+    #check successive rows and see if both docks available and bikes available changed,
+    elif extractedData[start][3] != extractedData[end][3] and extractedData[start][4] != extractedData[end][4]:
+        diff = extractedData[end][5] - extractedData[start][5]
+        interArrivals.append(diff)
+        start = end
+        end += 1
+    #if not, keep current start row and check next row to see if changed
+    else:
+        end += 1
+#Calculate sample lambda from interarrival times
+param = len(interArrivals)/sum(interArrivals)
+#Run K-S test for goodness of fit
+D, p_value = kstest(interArrivals, 'expon', args=(0, 1/param))
+print(f"K-S statistic: {D}")
+print(f"p-value: {p_value}")
