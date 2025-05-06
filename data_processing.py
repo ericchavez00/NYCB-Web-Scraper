@@ -12,24 +12,32 @@ rows = data.split('#')
 extractedData = [x for x in map(helper, rows) if x is not None]
 start = 0
 end = 1
-interArrivals = []
+rentInterArrivals = []
+returnInterArrivals = []
 while start < len(extractedData)-1 and end < len(extractedData):
     #check if start and end rows are on the same date
     if extractedData[start][1] > extractedData[end][1]:
         start = end
         end +=1
-    #check successive rows and see if both docks available and bikes available changed,
-    elif extractedData[start][3] != extractedData[end][3] and extractedData[start][4] != extractedData[end][4]:
+    #check successive rows and see if both docks available and bikes available changed, compute interarrival time and add to appropriate list
+    elif extractedData[start][3] > extractedData[end][3] and extractedData[start][4] < extractedData[end][4]:
         diff = extractedData[end][5] - extractedData[start][5]
-        interArrivals.append(diff)
+        returnInterArrivals.append(diff)
         start = end
         end += 1
+    elif extractedData[start][3] < extractedData[end][3] and extractedData[start][4] > extractedData[end][4]:
+        diff = extractedData[end][5] - extractedData[start][5]
+        rentInterArrivals.append(diff)
+        start = end
+        end += 1 
     #if not, keep current start row and check next row to see if changed
     else:
         end += 1
 #Calculate sample lambda from interarrival times
-param = len(interArrivals)/sum(interArrivals)
+returnParam = len(returnInterArrivals)/sum(returnInterArrivals)
+rentParam = len(rentInterArrivals)/sum(rentInterArrivals)
 #Run K-S test for goodness of fit
-D, p_value = kstest(interArrivals, 'expon', args=(0, 1/param))
+D, p_value = kstest(returnInterArrivals, 'expon', args=(0, 1/returnParam))
+print(returnInterArrivals)
 print(f"K-S statistic: {D}")
 print(f"p-value: {p_value}")
