@@ -7,48 +7,68 @@ def extractData(row):
     timestamp = localtime(row['last_reported'])
     if timestamp.tm_hour == 17 and timestamp.tm_min <= 15:
         return [timestamp.tm_mday,timestamp.tm_hour,timestamp.tm_min,timestamp.tm_sec, row['num_docks_available'], row['num_bikes_available'], row['last_reported']]
-with open("records.txt", "r") as file:
+with open("records_23.txt", "r") as file:
     data = file.read()   
 rows = data.split('\n')
 extractedData = [x for x in map(extractData, rows) if x is not None]
-start = 0
-end = 1
-rentInterArrivals = []
-returnInterArrivals = []
-while start < len(extractedData)-1 and end < len(extractedData):
-    #check if start and end rows are on the same date
-    if extractedData[start][0] != extractedData[end][0]:
-        start = end
-        end +=1
-    #check successive rows and see if both docks available and bikes available changed, compute interarrival time and add to appropriate list
-    elif extractedData[start][4] > extractedData[end][4] and extractedData[start][5] < extractedData[end][5]:
-        #Check if bike count was not updated at the same time as dock count and correct interarrival time
-        if extractedData[end][5] - extractedData[end-1][5] == 1 and extractedData[end][4] == extractedData[end-1][4]:
-            diff = extractedData[end-1][6] - extractedData[start][6]
-            returnInterArrivals.append(diff)
-            start = end - 1
-            end += 1
-        else: 
+def calculateRentInterArrivals(extractedData):
+    start = 0
+    end = 1
+    rentInterArrivals = [] 
+    currentDocks = extractedData[start][4]
+    currentBikes = extractedData[start][5]
+    while start < len(extractedData)-1 and end < len(extractedData):
+        #check if start and end rows are on the same date
+        if extractedData[start][0] != extractedData[end][0]:
+            start = end
+            end +=1
+            currentDocks = extractedData[start][4]
+            currentBikes = extractedData[start][5]
+        #check successive rows and see if the dock number went up and bike number went down, then compute interarrival time
+        elif extractedData[start][4] < extractedData[end][4] and extractedData[start][5] > extractedData[end][5]:
             diff = extractedData[end][6] - extractedData[start][6]
-            returnInterArrivals.append(diff)
+            rentInterArrivals.append(diff)
             start = end
             end += 1
-    elif extractedData[start][4] < extractedData[end][4] and extractedData[start][5] > extractedData[end][5]:
-        #Check if bike count was not updated at the same time as dock count and correct interarrival time
-        if extractedData[end-1][5] - extractedData[end][5] == 1 and extractedData[end][4] == extractedData[end-1][4]:
-            diff = extractedData[end-1][6] - extractedData[start][6]
-            rentInterArrivals.append(diff)
-            start = end - 1
-            end += 1
+            currentDocks = extractedData[start][4]
+            currentBikes = extractedData[start][5]
+        #if not, keep current start row and check next row to see if changed
         else:
+            currentDocks = extractedData[end][4]
+            currentBikes = extractedData[end][5]
+            end += 1
+    return rentInterArrivals
+def calculateReturnInterArrivals(extractedData):
+    start = 0
+    end = 1
+    returnInterArrivals = []
+    currentDocks = extractedData[start][4]
+    currentBikes = extractedData[start][5]
+    while start < len(extractedData)-1 and end < len(extractedData):
+        #check if start and end rows are on the same date
+        if extractedData[start][0] != extractedData[end][0]:
+            start = end
+            end +=1
+            currentDocks = extractedData[start][4]
+            currentBikes = extractedData[start][5]
+        #check successive rows and see if the dock number went down and bike number went up, then compute interarrival time
+        elif currentDocks > extractedData[end][4] and currentBikes < extractedData[end][5]:
             diff = extractedData[end][6] - extractedData[start][6]
-            rentInterArrivals.append(diff)
+            returnInterArrivals.append(diff)
             start = end
             end += 1
-    #if not, keep current start row and check next row to see if changed
-    else:
-        end += 1
+            currentDocks = extractedData[start][4]
+            currentBikes = extractedData[start][5]
+        #if not, keep current start row and check next row to see if changed
+        else:
+            currentDocks = extractedData[end][4]
+            currentBikes = extractedData[end][5]
+            end += 1
+    return returnInterArrivals
+
 #Calculate sample lambda values from interarrival times
+rentInterArrivals = calculateRentInterArrivals(extractedData)
+returnInterArrivals = calculateReturnInterArrivals(extractedData)
 returnParam = len(returnInterArrivals)/sum(returnInterArrivals)
 rentParam = len(rentInterArrivals)/sum(rentInterArrivals)
 #Run K-S test for goodness of fit on return and rent interarrival times
